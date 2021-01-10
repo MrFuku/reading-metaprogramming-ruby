@@ -1,4 +1,5 @@
-TryOver3 = Module.new
+module TryOver3; end
+
 # Q1
 # 以下要件を満たすクラス TryOver3::A1 を作成してください。
 # - run_test というインスタンスメソッドを持ち、それはnilを返す
@@ -6,6 +7,19 @@ TryOver3 = Module.new
 # - `test_` メソッドがこのクラスに実装されていなくても `test_` から始まるメッセージに応答することができる
 # - TryOver3::A1 には `test_` から始まるインスタンスメソッドが定義されていない
 
+class TryOver3::A1
+  def run_test
+    nil
+  end
+
+  private
+
+  def method_missing(name)
+    return run_test if name.to_s.start_with?('test_')
+
+    super
+  end
+end
 
 # Q2
 # 以下要件を満たす TryOver3::A2Proxy クラスを作成してください。
@@ -18,6 +32,23 @@ class TryOver3::A2
   end
 end
 
+class TryOver3::A2Proxy
+  def initialize(a2)
+    @source = a2
+  end
+
+  private
+
+  def method_missing(name, *args)
+    return @source.send(name, *args) if @source.respond_to?(name)
+
+    super
+  end
+
+  def respond_to_missing?(method, include_private = false)
+    @source.respond_to?(method) || super
+  end
+end
 
 # Q3
 # 前回 OriginalAccessor の my_attr_accessor で定義した getter/setter に boolean の値が入っている場合には #{name}? が定義されるようなモジュールを実装しました。
@@ -35,6 +66,8 @@ module TryOver3::OriginalAccessor2
           self.class.define_method "#{attr_sym}?" do
             @attr == true
           end
+        elsif respond_to?("#{attr_sym}?")
+          self.class.remove_method "#{attr_sym}?"
         end
         @attr = value
       end
@@ -49,6 +82,19 @@ end
 # TryOver3::A4::Hoge.run
 # # => "run Hoge"
 
+class TryOver3::A4
+  def self.runners=(klasses)
+    @klasses = klasses
+  end
+
+  def self.const_missing(name)
+    return super unless @klasses.include?(name)
+
+    Class.new do
+      define_singleton_method(:run) { "run #{name}" }
+    end
+  end
+end
 
 # Q5. チャレンジ問題！ 挑戦する方はテストの skip を外して挑戦してみてください。
 #
@@ -56,16 +102,26 @@ end
 module TryOver3::TaskHelper
   def self.included(klass)
     klass.define_singleton_method :task do |name, &task_block|
-      new_klass = Class.new do
-        define_singleton_method :run do
-          puts "start #{Time.now}"
-          block_return = task_block.call
-          puts "finish #{Time.now}"
-          block_return
+      self.define_singleton_method(name) do
+        puts "start #{Time.now}"
+        block_return = task_block.call
+        puts "finish #{Time.now}"
+        block_return
+      end
+    end
+
+    def klass.const_missing(name)
+      call_name = name.downcase # 本当はスネークケースにしないといけない
+      return super unless respond_to?(call_name)
+  
+      method = self.method(call_name)
+      class_name = self.name
+      Class.new do
+        define_singleton_method(:run) do
+          warn "Warning: #{class_name}::#{name}.run is deprecated"
+          method.call
         end
       end
-      new_klass_name = name.to_s.split("_").map{ |w| w[0] = w[0].upcase; w }.join
-      const_set(new_klass_name, new_klass)
     end
   end
 end
