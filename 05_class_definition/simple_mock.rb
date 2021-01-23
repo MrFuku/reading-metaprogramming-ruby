@@ -38,71 +38,36 @@
 # obj.called_times(:imitated_method) #=> 2
 # ```
 
-# module SimpleMock
-#   def self.new
-#     mock(Object.new)
-#   end
-
-#   def self.mock(obj)
-#     obj.extend(self)
-#   end
-
-#   def expects(call_name, return_value)
-#     define_singleton_method(call_name) do
-#       # if watch_methods.key?(call_name)
-#       return_value
-#     end
-#   end
-
-#   def watch(call_name)
-#     call_name = call_name.to_sym
-#     watch_methods[call_name] = 0
-#     class << self
-#       alias :a call_name
-#     end
-#   end
-
-#   def called_times(call_name)
-#     watch_methods[call_name] || 0
-#   end
-
-#   private
-
-#   def watch_methods
-#     @methods ||= {}
-#   end
-# end
-
 module SimpleMock
-  class << self
-    def mock(obj)
-      obj.extend(SimpleMock)
-    end
+  def self.new
+    mock(Object.new)
+  end
 
-    def new
-      mock(Object.new)
+  def self.mock(obj)
+    obj.extend(self)
+  end
+
+  def expects(call_name, return_value)
+    define_singleton_method(call_name.to_sym) { return_value }
+  end
+
+  def watch(call_name)
+    call_name = call_name.to_sym
+    watch_methods[call_name] = 0
+    call_method = method(call_name)
+    define_singleton_method(call_name) do
+      watch_methods[call_name] += 1
+      call_method.call
     end
   end
 
-  def expects(method_name, value)
-    define_singleton_method(method_name) do
-      @counter[method_name] += 1 if @counter&.key?(method_name)
-      value
-    end
-    @expects ||= []
-    @expects.push(method_name.to_sym)
+  def called_times(call_name)
+    watch_methods[call_name] || 0
   end
 
-  def watch(method_name)
-    (@counter ||= {})[method_name] = 0
+  private
 
-    return if @expects&.include?(method_name.to_sym)
-    define_singleton_method(method_name) do
-      @counter[method_name] += 1 if @counter&.key?(method_name)
-    end
-  end
-
-  def called_times(method_name)
-    @counter[method_name]
+  def watch_methods
+    @methods ||= {}
   end
 end
